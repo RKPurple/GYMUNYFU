@@ -26,6 +26,7 @@ var (
 	SIGNAL_RULESET_KEY                    = ""
 	APP_PORT                              = ""
 	CORS_ALLOWED_ORIGINS                  = ""
+	SUPABASE_URL                          = ""
 	client               *plaid.APIClient = nil
 
 	accessToken = ""
@@ -72,7 +73,7 @@ func init() {
 	SIGNAL_RULESET_KEY = os.Getenv("SIGNAL_RULESET_KEY")
 	APP_PORT = os.Getenv("APP_PORT")
 	CORS_ALLOWED_ORIGINS = os.Getenv("CORS_ALLOWED_ORIGINS")
-
+	SUPABASE_URL = os.Getenv("SUPABASE_URL")
 	// set defaults
 	if PLAID_PRODUCTS == "" {
 		PLAID_PRODUCTS = "transactions"
@@ -88,6 +89,9 @@ func init() {
 	}
 	if CORS_ALLOWED_ORIGINS == "" {
 		CORS_ALLOWED_ORIGINS = "http://localhost:5173"
+	}
+	if SUPABASE_URL == "" {
+		log.Fatal("SUPABASE_URL is required for Supabase JWT verification (JWKS)")
 	}
 	if PLAID_CLIENT_ID == "" {
 		log.Fatal("PLAID_CLIENT_ID is not set")
@@ -105,6 +109,13 @@ func init() {
 }
 
 func main() {
+	ctx := context.Background()
+	supabaseKf, err := newSupabaseKeyfunc(ctx, SUPABASE_URL)
+	if err != nil {
+		log.Fatalf("supabase JWKS: %v", err)
+	}
+	expectedIssuer := supabaseExpectedIssuer(SUPABASE_URL)
+
 	r := gin.Default()
 	allowedOrigins := splitCSV(CORS_ALLOWED_ORIGINS)
 	r.Use(cors.New(cors.Config{
@@ -128,7 +139,12 @@ func main() {
 	r.POST("/api/get_access_token", GetAccessToken)
 	r.POST("/api/link_exit_error", linkExitError) // Diagnostics for Early Link Exit
 
-	err := r.Run(":" + APP_PORT)
+	/* Supabase Auth */
+	apiAuth := r.Group("/api")
+	apiAuth.Use(supabaseAuthMiddleware(supabaseKf, expectedIssuer))
+	apiAuth.GET("/me", handleMe)
+
+	err = r.Run(":" + APP_PORT)
 	if err != nil {
 		panic("unable to start server")
 	}
