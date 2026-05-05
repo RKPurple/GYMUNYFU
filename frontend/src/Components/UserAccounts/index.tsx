@@ -1,6 +1,7 @@
 import { supabase } from '../../lib/supabaseClient'
-import type { Session } from '@supabase/supabase-js'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useAuth } from '../../context/authContext'
+import { useNavigate } from 'react-router-dom'
 
 type Mode = 'signin' | 'signup'
 
@@ -11,14 +12,9 @@ export default function UserAccounts() {
     const [confirm, setConfirm] = useState('')
     const [loading, setLoading] = useState(false)
     const [message, setMessage] = useState<string | null>(null)
-    const [session, setSession] = useState<Session | null>(null)
-
-    useEffect(() => {
-        supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null))
-        const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
-        return () => sub.subscription.unsubscribe()
-    }, [])
-
+    const { session, signOut } = useAuth()
+    const navigate = useNavigate()
+    
     const handleEmailAuth = async (e: React.FormEvent) => {
         e.preventDefault()
         setMessage(null)
@@ -48,14 +44,14 @@ export default function UserAccounts() {
         setLoading(true)
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
-            options: { redirectTo: `http://localhost:5173/` },
+            options: { redirectTo: import.meta.env.VITE_SIGNIN_REDIRECT_URL },
         })
         setLoading(false)
         if (error) setMessage(error.message)
     }
 
     const handleSignOut = async () => {
-        await supabase.auth.signOut()
+        await signOut()
         setMessage(null)
     }
 
@@ -72,8 +68,8 @@ export default function UserAccounts() {
     return (
         <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 p-6 max-w-md w-full">
             <div className="flex rounded-md bg-neutral-100 p-1">
-                <button type="button" className={`flex-1 rounded py-1.5 text-sm ${mode === 'signin' ? 'bg-white shadow' : ''}`} onClick={() => setMode('signin')}>Sign in</button>
-                <button type="button" className={`flex-1 rounded py-1.5 text-sm ${mode === 'signup' ? 'bg-white shadow' : ''}`} onClick={() => setMode('signup')}>Sign up</button>
+                <button type="button" className={`flex-1 rounded py-1.5 text-sm text-black ${mode === 'signin' ? 'bg-white shadow' : 'hover:cursor-pointer'}`} onClick={() => setMode('signin')}>Sign in</button>
+                <button type="button" className={`flex-1 rounded py-1.5 text-sm text-black ${mode === 'signup' ? 'bg-white shadow' : 'hover:cursor-pointer'}`} onClick={() => setMode('signup')}>Sign up</button>
             </div>
             <form onSubmit={handleEmailAuth} className="flex flex-col gap-3">
                 <label className="flex flex-col gap-1 text-sm">

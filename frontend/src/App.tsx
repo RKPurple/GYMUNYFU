@@ -1,13 +1,31 @@
-import PlaidLinkButton from "./Components/Link"
-import UserAccounts from "./Components/UserAccounts"
+import { Routes, Route, Navigate } from 'react-router-dom'
+import Login from './Pages/Login'
+import Connect from './Pages/Connect'
+import RequireAuth from './RequireAuth'
+import { useAuth } from './context/authContext'
 
-function App() {
+function AppRoutes() {
+  const { session, isLoading } = useAuth()
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center text-neutral-500">
+        Loading...
+      </div>
+    )
+  }
   return (
-    <div className="flex flex-col items-center justify-center h-screen w-screen gap-4">
-      <UserAccounts />
-      <PlaidLinkButton />
-    </div>
+    <Routes>
+      <Route path="/" element={<Navigate to={session ? '/connect' : '/login'} replace/>} />
+      <Route path="/login" element={session ? <Navigate to="/connect" replace/> : <Login />} />
+      <Route element={<RequireAuth />}>
+        <Route path="/connect" element={<Connect />} />
+      </Route>
+      <Route path="*" element={<Navigate to={session ? '/connect' : '/login'} replace />}/>
+    </Routes>
   )
 }
 
-export default App
+export default function App() {
+  return <AppRoutes />
+}
