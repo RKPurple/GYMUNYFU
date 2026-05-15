@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
+import { useAuth } from '../../context/authContext'
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, '')
 
@@ -9,6 +10,13 @@ export function PlaidLinkButton() {
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [exchangeStatus, setExchangeStatus] = useState<string | null>(null)
   const [isCreatingToken, setIsCreatingToken] = useState(false)
+  const { session, isLoading } = useAuth()
+
+  const authHeaders = useCallback((): HeadersInit => {
+    const token = session?.access_token
+    if (!token) return {}
+    return { Authorization: `Bearer ${token}` }
+  }, [session?.access_token])
 
   const onSuccess = useCallback(async (public_token: string) => {
     setExchangeStatus(null)
@@ -18,7 +26,10 @@ export function PlaidLinkButton() {
 
     const res = await fetch(`${API_BASE}/api/get_access_token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...authHeaders(),
+      },
       body,
     })
 
@@ -29,7 +40,7 @@ export function PlaidLinkButton() {
     }
 
     setExchangeStatus('Connected - token exchanged on server.')
-  }, [])
+  }, [authHeaders])
 
   const onExit = useCallback(async (err: unknown, metadata: unknown) => {
     try {
@@ -58,7 +69,13 @@ export function PlaidLinkButton() {
   }, [pendingOpen, linkToken, ready, open])
 
   const createLinkToken = useCallback(async () => {
-    const res = await fetch(`${API_BASE}/api/create_link_token`, { method: 'POST' })
+    if (!session?.access_token) throw new Error('Not signed in')
+    const res = await fetch(`${API_BASE}/api/create_link_token`, { 
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+      },
+    })
     if (!res.ok) {
       const text = await res.text()
       throw new Error(text || `create_link_token failed: ${res.status}`)
@@ -67,7 +84,7 @@ export function PlaidLinkButton() {
     const data = (await res.json()) as { link_token?: string }
     if (!data.link_token) throw new Error('No link_token in response')
     return data.link_token
-  }, [])
+  }, [authHeaders])
 
   const handleConnectClick = useCallback(async () => {
     setFetchError(null)

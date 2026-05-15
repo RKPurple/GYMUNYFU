@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -27,10 +28,10 @@ var (
 	APP_PORT                              = ""
 	CORS_ALLOWED_ORIGINS                  = ""
 	SUPABASE_URL                          = ""
+	DATABASE_URL                          = ""
 	client               *plaid.APIClient = nil
 
-	accessToken = ""
-	itemID      = ""
+	appDB *sql.DB
 )
 
 var environments = map[string]plaid.Environment{
@@ -74,6 +75,7 @@ func init() {
 	APP_PORT = os.Getenv("APP_PORT")
 	CORS_ALLOWED_ORIGINS = os.Getenv("CORS_ALLOWED_ORIGINS")
 	SUPABASE_URL = os.Getenv("SUPABASE_URL")
+	DATABASE_URL = os.Getenv("DATABASE_URL")
 	// set defaults
 	if PLAID_PRODUCTS == "" {
 		PLAID_PRODUCTS = "transactions"
@@ -92,6 +94,9 @@ func init() {
 	}
 	if SUPABASE_URL == "" {
 		log.Fatal("SUPABASE_URL is required for Supabase JWT verification (JWKS)")
+	}
+	if DATABASE_URL == "" {
+		log.Fatal("DATABASE_URL is required for database connection")
 	}
 	if PLAID_CLIENT_ID == "" {
 		log.Fatal("PLAID_CLIENT_ID is not set")
@@ -116,6 +121,13 @@ func main() {
 	}
 	expectedIssuer := supabaseExpectedIssuer(SUPABASE_URL)
 
+	db, err := openDB(ctx, DATABASE_URL)
+	if err != nil {
+		log.Fatalf("database: %v", err)
+	}
+	appDB = db
+	defer db.Close()
+
 	r := gin.Default()
 	allowedOrigins := splitCSV(CORS_ALLOWED_ORIGINS)
 	r.Use(cors.New(cors.Config{
@@ -126,8 +138,6 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	r.POST("/api/info", info)
-
 	/* Account Connection Flow
 	1. call create_link_token and pass to client
 	2. Use link_token to open Link for user and get temp public_token onSuccess
@@ -135,13 +145,15 @@ func main() {
 	4. Store access_token and use it to make product requests
 
 	*/
-	r.POST("/api/create_link_token", createLinkToken)
-	r.POST("/api/get_access_token", GetAccessToken)
 	r.POST("/api/link_exit_error", linkExitError) // Diagnostics for Early Link Exit
 
 	/* Supabase Auth */
 	apiAuth := r.Group("/api")
 	apiAuth.Use(supabaseAuthMiddleware(supabaseKf, expectedIssuer))
+
+	/* Protected Routes */
+	apiAuth.POST("/create_link_token", createLinkToken)
+	apiAuth.POST("/get_access_token", GetAccessToken)
 	apiAuth.GET("/me", handleMe)
 
 	err = r.Run(":" + APP_PORT)
@@ -151,20 +163,18 @@ func main() {
 
 }
 
-func info(context *gin.Context) {
-	context.JSON(http.StatusOK, map[string]interface{}{
-		"item_id":      itemID,
-		"access_token": accessToken,
-		"products":     strings.Split(PLAID_PRODUCTS, ","),
-	})
-}
-
 func createLinkToken(c *gin.Context) {
 	ctx := context.Background()
+	uid, exists := c.Get(ctxSupabaseUserID)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	supabaseUserID := uid.(string)
 
 	// Unique ID for current user.
 	user := plaid.LinkTokenCreateRequestUser{
-		ClientUserId: time.Now().String(),
+		ClientUserId: supabaseUserID,
 	}
 
 	// Create a link_token for the given user
@@ -198,6 +208,13 @@ func createLinkToken(c *gin.Context) {
 
 func GetAccessToken(c *gin.Context) {
 	ctx := context.Background()
+	uid, exists := c.Get(ctxSupabaseUserID)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	supabaseUserID := uid.(string)
+
 	publicToken := c.PostForm("public_token")
 
 	// exchange public_token for an access_token
@@ -214,8 +231,13 @@ func GetAccessToken(c *gin.Context) {
 	}
 
 	// Values should be saved to a persistent DB and associated with current user
-	accessToken = exchangePublicTokenResp.GetAccessToken()
-	itemID = exchangePublicTokenResp.GetItemId()
+	accessToken := exchangePublicTokenResp.GetAccessToken()
+	itemID := exchangePublicTokenResp.GetItemId()
+
+	if err := upsertPlaidItem(c.Request.Context(), appDB, supabaseUserID, itemID, accessToken); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save item"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"public_token_exchange": "complete",
