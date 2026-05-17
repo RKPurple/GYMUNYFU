@@ -67,10 +67,11 @@ export default function UserAccounts() {
     }
     return (
         <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 p-6 max-w-md w-full">
-            <div className="flex rounded-md bg-neutral-100 p-1">
+            <h1 className="text-4xl font-bold text-center">{mode === 'signin' ? 'Login' : 'Sign up'}</h1>
+            {/* <div className="flex rounded-md bg-neutral-100 p-1">
                 <button type="button" className={`flex-1 rounded py-1.5 text-sm text-black ${mode === 'signin' ? 'bg-white shadow' : 'hover:cursor-pointer'}`} onClick={() => setMode('signin')}>Sign in</button>
                 <button type="button" className={`flex-1 rounded py-1.5 text-sm text-black ${mode === 'signup' ? 'bg-white shadow' : 'hover:cursor-pointer'}`} onClick={() => setMode('signup')}>Sign up</button>
-            </div>
+            </div> */}
             <form onSubmit={handleEmailAuth} className="flex flex-col gap-3">
                 <label className="flex flex-col gap-1 text-sm">
                     <span>Email</span>
@@ -86,7 +87,7 @@ export default function UserAccounts() {
                         <input type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} className="rounded border px-3 py-2" />
                     </label>
                 )}
-                <button type="submit" disabled={loading} className="rounded bg-black px-4 py-2 text-white disabled:opacity-50">
+                <button type="submit" disabled={loading} className="rounded bg-white px-4 py-2 text-black disabled:opacity-50 hover:cursor-pointer">
                     {loading ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}
                 </button>
             </form>
@@ -94,8 +95,11 @@ export default function UserAccounts() {
                 <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-neutral-200" /></div>
                 <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-neutral-500">Or</span></div>
             </div>
-            <button type="button" onClick={handleGoogleAuth} disabled={loading} className="rounded border border-neutral-300 px-4 py-2 text-sm disabled:opacity-50">
+            <button type="button" onClick={handleGoogleAuth} disabled={loading} className="rounded border border-neutral-300 px-4 py-2 text-sm disabled:opacity-50 hover:cursor-pointer">
                 Continue with Google
+            </button>
+            <button type="button" onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')} className="rounded px-4 py-2 text-gray-500 disabled:opacity-50 hover:cursor-pointer">
+                {mode === 'signin' ? 'Sign Up' : 'Back to Login'}
             </button>
             {message && <p className="text-sm text-neutral-600">{message}</p>}
         </div>

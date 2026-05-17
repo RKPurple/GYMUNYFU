@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Login from './Pages/Login'
-import Connect from './Pages/Connect'
+import Account from './Pages/Account'
 import RequireAuth from './RequireAuth'
 import { useAuth } from './context/authContext'
 
@@ -16,12 +16,12 @@ function AppRoutes() {
   }
   return (
     <Routes>
-      <Route path="/" element={<Navigate to={session ? '/connect' : '/login'} replace/>} />
-      <Route path="/login" element={session ? <Navigate to="/connect" replace/> : <Login />} />
+      <Route path="/" element={<Navigate to={session ? '/account' : '/login'} replace/>} />
+      <Route path="/login" element={session ? <Navigate to="/account" replace/> : <Login />} />
       <Route element={<RequireAuth />}>
-        <Route path="/connect" element={<Connect />} />
+        <Route path="/account" element={<Account />} />
       </Route>
-      <Route path="*" element={<Navigate to={session ? '/connect' : '/login'} replace />}/>
+      <Route path="*" element={<Navigate to={session ? '/account' : '/login'} replace />}/>
     </Routes>
   )
 }

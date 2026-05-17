@@ -11,6 +11,12 @@ export type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
+function stripAuthHashFromUrl() {
+    if (window.location.hash) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [session, setSession] = useState<Session | null>(null)
     const [isLoading, setIsLoading] = useState(true)
@@ -21,11 +27,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (cancelled) return
             setSession(data.session ?? null)
             setIsLoading(false)
+            if (data.session) stripAuthHashFromUrl()
         })
 
-        const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+        const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
             setSession(next)
             setIsLoading(false)
+            if (next && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+                stripAuthHashFromUrl()
+            }
         })
 
         return () => {
